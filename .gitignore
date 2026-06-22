@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+dist/
+build/
+.expo/
+.expo-shared/
+.env
+.env.local
+*.log
+.DS_Store
+Thumbs.db

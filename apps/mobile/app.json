@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "FamilyBrain",
+    "slug": "familybrain",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "sdkVersion": "51.0.0"
+  }
+}

@@ -1,0 +1,141 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  ADULT
+  TEEN
+  CHILD
+  CARER
+}
+
+model Household {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users             User[]
+  events            CalendarEvent[]
+  tasks             Task[]
+  shoppingItems     ShoppingItem[]
+  renewables        Renewable[]
+  emergencyContacts EmergencyContact[]
+  notifications     Notification[]
+}
+
+model User {
+  id          String   @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id])
+  name        String
+  email       String?  @unique
+  role        Role
+  createdAt   DateTime @default(now())
+
+  eventsOwned    CalendarEvent[] @relation("EventOwner")
+  tasksAssigned  Task[]          @relation("TaskAssignee")
+  medicalProfile MedicalProfile?
+}
+
+model CalendarEvent {
+  id          String   @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id])
+  ownerId     String
+  owner       User      @relation("EventOwner", fields: [ownerId], references: [id])
+  title       String
+  startsAt    DateTime
+  endsAt      DateTime
+  source      String    @default("manual")
+  createdAt   DateTime  @default(now())
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id])
+  assigneeId  String?
+  assignee    User?     @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  title       String
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model ShoppingItem {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id])
+  name        String
+  quantity    Int       @default(1)
+  checkedAt   DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+enum RenewableType {
+  BILL
+  INSURANCE
+  MOT
+  PASSPORT
+  VISA
+  DRIVING_LICENCE
+  TV_LICENCE
+  SUBSCRIPTION
+  WARRANTY
+  OTHER
+}
+
+model Renewable {
+  id          String        @id @default(cuid())
+  householdId String
+  household   Household     @relation(fields: [householdId], references: [id])
+  type        RenewableType
+  name        String
+  dueDate     DateTime
+  amount      Decimal?
+  documentUrl String?
+  createdAt   DateTime      @default(now())
+}
+
+model EmergencyContact {
+  id           String    @id @default(cuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id])
+  name         String
+  relationship String
+  phone        String
+  createdAt    DateTime  @default(now())
+}
+
+model MedicalProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  user        User    @relation(fields: [userId], references: [id])
+  allergies   String?
+  conditions  String?
+  medications String?
+  gpName      String?
+  gpPhone     String?
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  householdId String
+  household   Household           @relation(fields: [householdId], references: [id])
+  channel     NotificationChannel
+  body        String
+  sentAt      DateTime?
+  createdAt   DateTime            @default(now())
+}
