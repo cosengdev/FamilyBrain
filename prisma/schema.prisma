@@ -35,6 +35,7 @@ model User {
   household   Household @relation(fields: [householdId], references: [id])
   name        String
   email       String?  @unique
+  passwordHash String
   role        Role
   createdAt   DateTime @default(now())
 
