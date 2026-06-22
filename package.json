@@ -11,7 +11,8 @@
     "build:web": "npm run build -w apps/web",
     "dev:mobile": "npm run start -w apps/mobile",
     "prisma:generate": "prisma generate",
-    "prisma:validate": "prisma validate"
+    "prisma:validate": "prisma validate",
+    "postinstall": "prisma generate"
   },
   "devDependencies": {
     "prisma": "^5.20.0"
