@@ -27,6 +27,7 @@ model Household {
   renewables        Renewable[]
   emergencyContacts EmergencyContact[]
   notifications     Notification[]
+  invites           Invite[]
 }
 
 model User {
@@ -139,4 +140,15 @@ model Notification {
   body        String
   sentAt      DateTime?
   createdAt   DateTime            @default(now())
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  householdId String
+  household   Household @relation(fields: [householdId], references: [id])
+  email       String
+  role        Role
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
 }

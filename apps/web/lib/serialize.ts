@@ -1,4 +1,4 @@
-import type { CalendarEvent, ShoppingItem, Renewable, EmergencyContact, MedicalProfile } from "@prisma/client";
+import type { CalendarEvent, ShoppingItem, Renewable, EmergencyContact, MedicalProfile, Invite } from "@prisma/client";
 
 export function serializeEvent(e: CalendarEvent) {
   return {
@@ -34,6 +34,16 @@ export function serializeEmergencyContact(c: EmergencyContact) {
     name: c.name,
     relationship: c.relationship,
     phone: c.phone,
+  };
+}
+
+export function serializeInvite(i: Invite) {
+  return {
+    id: i.id,
+    email: i.email,
+    role: i.role,
+    expiresAt: i.expiresAt.toISOString(),
+    acceptedAt: i.acceptedAt ? i.acceptedAt.toISOString() : null,
   };
 }
 

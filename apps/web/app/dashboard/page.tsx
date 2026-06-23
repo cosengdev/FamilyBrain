@@ -8,6 +8,7 @@ import {
   serializeRenewable,
   serializeEmergencyContact,
   serializeMedicalProfile,
+  serializeInvite,
 } from "@/lib/serialize";
 import DashboardClient from "./DashboardClient";
 
@@ -17,7 +18,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [household, events, shoppingItems, renewables, emergencyContacts, medicalProfile, digest] =
+  const [household, events, shoppingItems, renewables, emergencyContacts, medicalProfile, invites, digest] =
     await Promise.all([
       prisma.household.findUnique({ where: { id: session.householdId } }),
       prisma.calendarEvent.findMany({
@@ -37,18 +38,23 @@ export default async function DashboardPage() {
         orderBy: { createdAt: "asc" },
       }),
       prisma.medicalProfile.findUnique({ where: { userId: session.userId } }),
+      session.role === "ADMIN"
+        ? prisma.invite.findMany({ where: { householdId: session.householdId }, orderBy: { createdAt: "desc" } })
+        : Promise.resolve([]),
       buildDigest(session.householdId),
     ]);
 
   return (
     <DashboardClient
       userName={session.name}
+      role={session.role}
       householdName={household?.name ?? "Your household"}
       initialEvents={events.map(serializeEvent)}
       initialShoppingItems={shoppingItems.map(serializeShoppingItem)}
       initialRenewables={renewables.map(serializeRenewable)}
       initialEmergencyContacts={emergencyContacts.map(serializeEmergencyContact)}
       initialMedicalProfile={serializeMedicalProfile(medicalProfile)}
+      initialInvites={invites.map(serializeInvite)}
       digest={digest}
     />
   );

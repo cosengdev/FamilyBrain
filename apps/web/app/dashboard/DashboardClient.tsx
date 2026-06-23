@@ -21,14 +21,18 @@ type DigestDTO = {
   shoppingItemCount: number;
 };
 
+type InviteDTO = { id: string; email: string; role: string; expiresAt: string; acceptedAt: string | null };
+
 interface Props {
   userName: string;
+  role: string;
   householdName: string;
   initialEvents: EventDTO[];
   initialShoppingItems: ShoppingItemDTO[];
   initialRenewables: RenewableDTO[];
   initialEmergencyContacts: EmergencyContactDTO[];
   initialMedicalProfile: MedicalProfileDTO;
+  initialInvites: InviteDTO[];
   digest: DigestDTO;
 }
 
@@ -45,14 +49,18 @@ const RENEWABLE_TYPES = [
   "OTHER",
 ];
 
+const HOUSEHOLD_ROLES = ["ADMIN", "ADULT", "TEEN", "CHILD", "CARER"];
+
 export default function DashboardClient({
   userName,
+  role,
   householdName,
   initialEvents,
   initialShoppingItems,
   initialRenewables,
   initialEmergencyContacts,
   initialMedicalProfile,
+  initialInvites,
   digest,
 }: Props) {
   const router = useRouter();
@@ -60,6 +68,7 @@ export default function DashboardClient({
   const [shoppingItems, setShoppingItems] = useState(initialShoppingItems);
   const [renewables, setRenewables] = useState(initialRenewables);
   const [contacts, setContacts] = useState(initialEmergencyContacts);
+  const [invites, setInvites] = useState(initialInvites);
 
   const [eventTitle, setEventTitle] = useState("");
   const [eventStart, setEventStart] = useState("");
@@ -79,6 +88,30 @@ export default function DashboardClient({
   const [conditions, setConditions] = useState(initialMedicalProfile?.conditions ?? "");
   const [medications, setMedications] = useState(initialMedicalProfile?.medications ?? "");
   const [medicalSaved, setMedicalSaved] = useState(false);
+
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("ADULT");
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
+
+  async function sendInvite(e: FormEvent) {
+    e.preventDefault();
+    setInviteError(null);
+    setLastInviteLink(null);
+    const res = await fetch("/api/household/invites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setInviteError(data.error || "Couldn't send that invite");
+      return;
+    }
+    setInvites((prev) => [data.invite, ...prev]);
+    setLastInviteLink(`${window.location.origin}/invite/${data.invite.id}`);
+    setInviteEmail("");
+  }
 
   async function addEvent(e: FormEvent) {
     e.preventDefault();
@@ -377,6 +410,51 @@ export default function DashboardClient({
           {medicalSaved && <span>Saved.</span>}
         </form>
       </section>
+
+      {role === "ADMIN" && (
+        <section>
+          <h2>Invite a family member</h2>
+          <ul>
+            {invites.map((inv) => (
+              <li key={inv.id}>
+                <span>
+                  {inv.email} ({inv.role.toLowerCase()}) —{" "}
+                  {inv.acceptedAt ? "joined" : new Date(inv.expiresAt) < new Date() ? "expired" : "pending"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <form onSubmit={sendInvite}>
+            <label>
+              Email
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(ev) => setInviteEmail(ev.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Role
+              <select value={inviteRole} onChange={(ev) => setInviteRole(ev.target.value)}>
+                {HOUSEHOLD_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {r.toLowerCase()}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {inviteError && <p role="alert">{inviteError}</p>}
+            <button type="submit">Send invite</button>
+          </form>
+          {lastInviteLink && (
+            <p>
+              Share this link with them — it expires in 7 days: <br />
+              <code>{lastInviteLink}</code>
+            </p>
+          )}
+        </section>
+      )}
     </main>
   );
 }
