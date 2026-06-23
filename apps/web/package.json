@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
     "@familybrain/shared": "*",
     "@prisma/client": "^5.20.0",
     "bcryptjs": "^2.4.3",

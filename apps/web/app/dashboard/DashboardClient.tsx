@@ -23,6 +23,8 @@ type DigestDTO = {
 
 type InviteDTO = { id: string; email: string; role: string; expiresAt: string; acceptedAt: string | null };
 
+type ChatMessage = { role: "user" | "assistant"; content: string };
+
 interface Props {
   userName: string;
   role: string;
@@ -111,6 +113,41 @@ export default function DashboardClient({
     setInvites((prev) => [data.invite, ...prev]);
     setLastInviteLink(`${window.location.origin}/invite/${data.invite.id}`);
     setInviteEmail("");
+  }
+
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+
+  async function sendChatMessage(e: FormEvent) {
+    e.preventDefault();
+    if (!chatInput.trim()) return;
+    const nextMessages: ChatMessage[] = [...chatMessages, { role: "user", content: chatInput }];
+    setChatMessages(nextMessages);
+    setChatInput("");
+    setChatSending(true);
+
+    const res = await fetch("/api/assistant/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: nextMessages }),
+    });
+    setChatSending(false);
+
+    if (!res.ok) {
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "Sorry, something went wrong." }]);
+      return;
+    }
+
+    const data = await res.json();
+    setChatMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
+
+    for (const action of data.actions ?? []) {
+      if (action.tool === "create_event") setEvents((prev) => [...prev, action.result.event]);
+      if (action.tool === "add_shopping_item") setShoppingItems((prev) => [...prev, action.result.item]);
+      if (action.tool === "add_renewable") setRenewables((prev) => [...prev, action.result.renewable]);
+      if (action.tool === "add_emergency_contact") setContacts((prev) => [...prev, action.result.contact]);
+    }
   }
 
   async function addEvent(e: FormEvent) {
@@ -259,6 +296,33 @@ export default function DashboardClient({
             )}
           </ul>
         )}
+      </section>
+
+      <section>
+        <h2>Ask FamilyBrain</h2>
+        <ul>
+          {chatMessages.map((m, i) => (
+            <li key={i}>
+              <span>
+                <strong>{m.role === "user" ? "You" : "FamilyBrain"}:</strong> {m.content}
+              </span>
+            </li>
+          ))}
+          {chatSending && (
+            <li>
+              <span>FamilyBrain is thinking...</span>
+            </li>
+          )}
+        </ul>
+        <form onSubmit={sendChatMessage}>
+          <label>
+            Try &quot;Add dentist appointment for tomorrow at 3pm&quot; or &quot;What&apos;s on today?&quot;
+            <input value={chatInput} onChange={(ev) => setChatInput(ev.target.value)} required />
+          </label>
+          <button type="submit" disabled={chatSending}>
+            Send
+          </button>
+        </form>
       </section>
 
       <section>
