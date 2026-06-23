@@ -25,6 +25,27 @@ type InviteDTO = { id: string; email: string; role: string; expiresAt: string; a
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
+type MealPlanDTO = {
+  id: string;
+  weekStartDate: string;
+  days: { date: string; title: string; ingredients: string[] }[];
+} | null;
+
+type TransactionDTO = { id: string; description: string; amount: number; category: string; occurredAt: string };
+type BudgetGoalDTO = {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  targetDate: string | null;
+};
+type BudgetSummaryDTO = {
+  month: string;
+  totalThisMonth: number;
+  byCategory: { category: string; total: number }[];
+  anomalies: { category: string; currentTotal: number; previousAverage: number; difference: number }[];
+};
+
 interface Props {
   userName: string;
   role: string;
@@ -35,6 +56,10 @@ interface Props {
   initialEmergencyContacts: EmergencyContactDTO[];
   initialMedicalProfile: MedicalProfileDTO;
   initialInvites: InviteDTO[];
+  initialMealPlan: MealPlanDTO;
+  initialTransactions: TransactionDTO[];
+  initialBudgetGoals: BudgetGoalDTO[];
+  budgetSummary: BudgetSummaryDTO;
   digest: DigestDTO;
 }
 
@@ -52,6 +77,16 @@ const RENEWABLE_TYPES = [
 ];
 
 const HOUSEHOLD_ROLES = ["ADMIN", "ADULT", "TEEN", "CHILD", "CARER"];
+const TRANSACTION_CATEGORIES = [
+  "GROCERIES",
+  "BILLS",
+  "TRANSPORT",
+  "ENTERTAINMENT",
+  "HEALTH",
+  "EDUCATION",
+  "SAVINGS",
+  "OTHER",
+];
 
 export default function DashboardClient({
   userName,
@@ -63,6 +98,10 @@ export default function DashboardClient({
   initialEmergencyContacts,
   initialMedicalProfile,
   initialInvites,
+  initialMealPlan,
+  initialTransactions,
+  initialBudgetGoals,
+  budgetSummary,
   digest,
 }: Props) {
   const router = useRouter();
@@ -70,6 +109,11 @@ export default function DashboardClient({
   const [shoppingItems, setShoppingItems] = useState(initialShoppingItems);
   const [renewables, setRenewables] = useState(initialRenewables);
   const [contacts, setContacts] = useState(initialEmergencyContacts);
+  const [mealPlan, setMealPlan] = useState(initialMealPlan);
+  const [mealPlanLoading, setMealPlanLoading] = useState(false);
+  const [mealNotes, setMealNotes] = useState("");
+  const [transactions, setTransactions] = useState(initialTransactions);
+  const [budgetGoals, setBudgetGoals] = useState(initialBudgetGoals);
   const [invites, setInvites] = useState(initialInvites);
 
   const [eventTitle, setEventTitle] = useState("");
@@ -115,6 +159,95 @@ export default function DashboardClient({
     setInviteEmail("");
   }
 
+  async function generateMealPlan(e: FormEvent) {
+    e.preventDefault();
+    setMealPlanLoading(true);
+    const res = await fetch("/api/meal-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: mealNotes || undefined }),
+    });
+    setMealPlanLoading(false);
+    if (res.ok) {
+      const data = await res.json();
+      setMealPlan(data.mealPlan);
+    }
+  }
+
+  async function addMealIngredientsToShoppingList() {
+    const res = await fetch("/api/meal-plan/add-to-shopping-list", { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      setShoppingItems((prev) => [...prev, ...data.items]);
+    }
+  }
+
+  const [transactionDescription, setTransactionDescription] = useState("");
+  const [transactionAmount, setTransactionAmount] = useState("");
+  const [transactionCategory, setTransactionCategory] = useState("GROCERIES");
+
+  async function addTransaction(e: FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: transactionDescription,
+        amount: Number(transactionAmount),
+        category: transactionCategory,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setTransactions((prev) => [data.transaction, ...prev]);
+      setTransactionDescription("");
+      setTransactionAmount("");
+    }
+  }
+
+  async function deleteTransaction(id: string) {
+    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
+    if (res.ok) setTransactions((prev) => prev.filter((t) => t.id !== id));
+  }
+
+  const [goalName, setGoalName] = useState("");
+  const [goalTarget, setGoalTarget] = useState("");
+
+  async function addGoal(e: FormEvent) {
+    e.preventDefault();
+    const res = await fetch("/api/budget/goals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: goalName, targetAmount: Number(goalTarget) }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setBudgetGoals((prev) => [...prev, data.goal]);
+      setGoalName("");
+      setGoalTarget("");
+    }
+  }
+
+  async function contributeToGoal(id: string) {
+    const amountStr = window.prompt("How much would you like to add to this goal?");
+    const amount = Number(amountStr);
+    if (!amountStr || !Number.isFinite(amount)) return;
+    const res = await fetch(`/api/budget/goals/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ addAmount: amount }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setBudgetGoals((prev) => prev.map((g) => (g.id === id ? data.goal : g)));
+    }
+  }
+
+  async function deleteGoal(id: string) {
+    const res = await fetch(`/api/budget/goals/${id}`, { method: "DELETE" });
+    if (res.ok) setBudgetGoals((prev) => prev.filter((g) => g.id !== id));
+  }
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatSending, setChatSending] = useState(false);
@@ -147,6 +280,9 @@ export default function DashboardClient({
       if (action.tool === "add_shopping_item") setShoppingItems((prev) => [...prev, action.result.item]);
       if (action.tool === "add_renewable") setRenewables((prev) => [...prev, action.result.renewable]);
       if (action.tool === "add_emergency_contact") setContacts((prev) => [...prev, action.result.contact]);
+      if (action.tool === "add_transaction") setTransactions((prev) => [action.result.transaction, ...prev]);
+      if (action.tool === "add_budget_goal") setBudgetGoals((prev) => [...prev, action.result.goal]);
+      if (action.tool === "generate_meal_plan") setMealPlan(action.result.mealPlan);
     }
   }
 
@@ -384,6 +520,36 @@ export default function DashboardClient({
       </section>
 
       <section>
+        <h2>This week&apos;s meals</h2>
+        {mealPlan ? (
+          <>
+            <ul>
+              {mealPlan.days.map((d) => (
+                <li key={d.date}>
+                  <span>
+                    {new Date(d.date).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" })}
+                    : <strong>{d.title}</strong> — {d.ingredients.join(", ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <button onClick={addMealIngredientsToShoppingList}>Add ingredients to shopping list</button>
+          </>
+        ) : (
+          <p>No meal plan yet this week.</p>
+        )}
+        <form onSubmit={generateMealPlan}>
+          <label>
+            Dietary notes / allergies / preferences (optional)
+            <input value={mealNotes} onChange={(ev) => setMealNotes(ev.target.value)} placeholder="e.g. no nuts, one vegetarian night, budget-friendly" />
+          </label>
+          <button type="submit" disabled={mealPlanLoading}>
+            {mealPlanLoading ? "Planning..." : mealPlan ? "Regenerate meal plan" : "Generate meal plan"}
+          </button>
+        </form>
+      </section>
+
+      <section>
         <h2>Bills &amp; renewals</h2>
         <ul>
           {renewables.map((r) => {
@@ -419,6 +585,101 @@ export default function DashboardClient({
             <input type="date" value={renewableDue} onChange={(ev) => setRenewableDue(ev.target.value)} required />
           </label>
           <button type="submit">Add renewal</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Budget</h2>
+        <p>
+          £{budgetSummary.totalThisMonth.toFixed(2)} spent in {budgetSummary.month}
+          {budgetSummary.byCategory.length > 0 && (
+            <>
+              {" "}
+              ({budgetSummary.byCategory.map((c) => `${c.category.toLowerCase()}: £${c.total.toFixed(2)}`).join(", ")})
+            </>
+          )}
+        </p>
+        {budgetSummary.anomalies.length > 0 && (
+          <ul>
+            {budgetSummary.anomalies.map((a) => (
+              <li key={a.category}>
+                <span>
+                  You&apos;ve spent £{a.difference.toFixed(0)} more than usual on {a.category.toLowerCase()} this
+                  month.
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h3>Recent transactions</h3>
+        <ul>
+          {transactions.slice(0, 10).map((t) => (
+            <li key={t.id}>
+              <span>
+                {t.description} — £{t.amount.toFixed(2)} ({t.category.toLowerCase()}) on{" "}
+                {new Date(t.occurredAt).toLocaleDateString()}
+              </span>
+              <button onClick={() => deleteTransaction(t.id)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={addTransaction}>
+          <label>
+            Description
+            <input
+              value={transactionDescription}
+              onChange={(ev) => setTransactionDescription(ev.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Amount (£)
+            <input
+              type="number"
+              step="0.01"
+              value={transactionAmount}
+              onChange={(ev) => setTransactionAmount(ev.target.value)}
+              required
+            />
+          </label>
+          <label>
+            Category
+            <select value={transactionCategory} onChange={(ev) => setTransactionCategory(ev.target.value)}>
+              {TRANSACTION_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c.toLowerCase()}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="submit">Log expense</button>
+        </form>
+
+        <h3>Savings goals</h3>
+        <ul>
+          {budgetGoals.map((g) => (
+            <li key={g.id}>
+              <span>
+                {g.name}: £{g.savedAmount.toFixed(2)} / £{g.targetAmount.toFixed(2)}
+              </span>
+              <span>
+                <button onClick={() => contributeToGoal(g.id)}>Add savings</button>
+                <button onClick={() => deleteGoal(g.id)}>Remove</button>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={addGoal}>
+          <label>
+            Goal name
+            <input value={goalName} onChange={(ev) => setGoalName(ev.target.value)} required />
+          </label>
+          <label>
+            Target (£)
+            <input type="number" step="0.01" value={goalTarget} onChange={(ev) => setGoalTarget(ev.target.value)} required />
+          </label>
+          <button type="submit">Add goal</button>
         </form>
       </section>
 

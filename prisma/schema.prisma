@@ -16,9 +16,10 @@ enum Role {
 }
 
 model Household {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  name         String
+  dietaryNotes String?
+  createdAt    DateTime @default(now())
 
   users             User[]
   events            CalendarEvent[]
@@ -28,6 +29,9 @@ model Household {
   emergencyContacts EmergencyContact[]
   notifications     Notification[]
   invites           Invite[]
+  mealPlans         MealPlan[]
+  transactions      Transaction[]
+  budgetGoals       BudgetGoal[]
 }
 
 model User {
@@ -151,4 +155,46 @@ model Invite {
   expiresAt   DateTime
   acceptedAt  DateTime?
   createdAt   DateTime  @default(now())
+}
+
+model MealPlan {
+  id            String    @id @default(cuid())
+  householdId   String
+  household     Household @relation(fields: [householdId], references: [id])
+  weekStartDate DateTime
+  days          Json
+  createdAt     DateTime  @default(now())
+}
+
+enum TransactionCategory {
+  GROCERIES
+  BILLS
+  TRANSPORT
+  ENTERTAINMENT
+  HEALTH
+  EDUCATION
+  SAVINGS
+  OTHER
+}
+
+model Transaction {
+  id          String              @id @default(cuid())
+  householdId String
+  household   Household           @relation(fields: [householdId], references: [id])
+  description String
+  amount      Decimal
+  category    TransactionCategory
+  occurredAt  DateTime
+  createdAt   DateTime            @default(now())
+}
+
+model BudgetGoal {
+  id           String    @id @default(cuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id])
+  name         String
+  targetAmount Decimal
+  savedAmount  Decimal   @default(0)
+  targetDate   DateTime?
+  createdAt    DateTime  @default(now())
 }

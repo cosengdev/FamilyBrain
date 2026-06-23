@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { buildDigest } from "@/lib/digest";
+import { buildBudgetSummary } from "@/lib/budget";
 import {
   serializeEvent,
   serializeShoppingItem,
@@ -9,6 +10,9 @@ import {
   serializeEmergencyContact,
   serializeMedicalProfile,
   serializeInvite,
+  serializeMealPlan,
+  serializeTransaction,
+  serializeBudgetGoal,
 } from "@/lib/serialize";
 import DashboardClient from "./DashboardClient";
 
@@ -18,31 +22,51 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [household, events, shoppingItems, renewables, emergencyContacts, medicalProfile, invites, digest] =
-    await Promise.all([
-      prisma.household.findUnique({ where: { id: session.householdId } }),
-      prisma.calendarEvent.findMany({
-        where: { householdId: session.householdId },
-        orderBy: { startsAt: "asc" },
-      }),
-      prisma.shoppingItem.findMany({
-        where: { householdId: session.householdId },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.renewable.findMany({
-        where: { householdId: session.householdId },
-        orderBy: { dueDate: "asc" },
-      }),
-      prisma.emergencyContact.findMany({
-        where: { householdId: session.householdId },
-        orderBy: { createdAt: "asc" },
-      }),
-      prisma.medicalProfile.findUnique({ where: { userId: session.userId } }),
-      session.role === "ADMIN"
-        ? prisma.invite.findMany({ where: { householdId: session.householdId }, orderBy: { createdAt: "desc" } })
-        : Promise.resolve([]),
-      buildDigest(session.householdId),
-    ]);
+  const [
+    household,
+    events,
+    shoppingItems,
+    renewables,
+    emergencyContacts,
+    medicalProfile,
+    invites,
+    mealPlan,
+    transactions,
+    budgetGoals,
+    budgetSummary,
+    digest,
+  ] = await Promise.all([
+    prisma.household.findUnique({ where: { id: session.householdId } }),
+    prisma.calendarEvent.findMany({
+      where: { householdId: session.householdId },
+      orderBy: { startsAt: "asc" },
+    }),
+    prisma.shoppingItem.findMany({
+      where: { householdId: session.householdId },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.renewable.findMany({
+      where: { householdId: session.householdId },
+      orderBy: { dueDate: "asc" },
+    }),
+    prisma.emergencyContact.findMany({
+      where: { householdId: session.householdId },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.medicalProfile.findUnique({ where: { userId: session.userId } }),
+    session.role === "ADMIN"
+      ? prisma.invite.findMany({ where: { householdId: session.householdId }, orderBy: { createdAt: "desc" } })
+      : Promise.resolve([]),
+    prisma.mealPlan.findFirst({ where: { householdId: session.householdId }, orderBy: { createdAt: "desc" } }),
+    prisma.transaction.findMany({
+      where: { householdId: session.householdId },
+      orderBy: { occurredAt: "desc" },
+      take: 100,
+    }),
+    prisma.budgetGoal.findMany({ where: { householdId: session.householdId }, orderBy: { createdAt: "asc" } }),
+    buildBudgetSummary(session.householdId),
+    buildDigest(session.householdId),
+  ]);
 
   return (
     <DashboardClient
@@ -55,6 +79,10 @@ export default async function DashboardPage() {
       initialEmergencyContacts={emergencyContacts.map(serializeEmergencyContact)}
       initialMedicalProfile={serializeMedicalProfile(medicalProfile)}
       initialInvites={invites.map(serializeInvite)}
+      initialMealPlan={mealPlan ? serializeMealPlan(mealPlan) : null}
+      initialTransactions={transactions.map(serializeTransaction)}
+      initialBudgetGoals={budgetGoals.map(serializeBudgetGoal)}
+      budgetSummary={budgetSummary}
       digest={digest}
     />
   );

@@ -1,8 +1,17 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { RenewableType } from "@prisma/client";
+import type { RenewableType, TransactionCategory } from "@prisma/client";
 import { prisma } from "./prisma";
 import { buildDigest } from "./digest";
-import { serializeEvent, serializeShoppingItem, serializeRenewable, serializeEmergencyContact } from "./serialize";
+import { generateAndSaveMealPlan } from "./meal-plan";
+import {
+  serializeEvent,
+  serializeShoppingItem,
+  serializeRenewable,
+  serializeEmergencyContact,
+  serializeTransaction,
+  serializeBudgetGoal,
+  serializeMealPlan,
+} from "./serialize";
 
 const RENEWABLE_TYPES = [
   "BILL",
@@ -14,6 +23,17 @@ const RENEWABLE_TYPES = [
   "TV_LICENCE",
   "SUBSCRIPTION",
   "WARRANTY",
+  "OTHER",
+];
+
+const TRANSACTION_CATEGORIES = [
+  "GROCERIES",
+  "BILLS",
+  "TRANSPORT",
+  "ENTERTAINMENT",
+  "HEALTH",
+  "EDUCATION",
+  "SAVINGS",
   "OTHER",
 ];
 
@@ -77,6 +97,41 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = [
       "Get today's calendar events, renewals due within 30 days, and the open shopping item count for the household.",
     input_schema: { type: "object", properties: {} },
   },
+  {
+    name: "add_transaction",
+    description: "Log a household expense (a manual transaction entry, not a real bank payment).",
+    input_schema: {
+      type: "object",
+      properties: {
+        description: { type: "string" },
+        amount: { type: "number", description: "Amount in GBP" },
+        category: { type: "string", enum: TRANSACTION_CATEGORIES },
+      },
+      required: ["description", "amount", "category"],
+    },
+  },
+  {
+    name: "add_budget_goal",
+    description: "Create a savings goal for the household (e.g. a family trip fund).",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        targetAmount: { type: "number", description: "Target amount in GBP" },
+      },
+      required: ["name", "targetAmount"],
+    },
+  },
+  {
+    name: "generate_meal_plan",
+    description: "Generate a new 7-day family dinner plan, optionally with dietary notes or preferences.",
+    input_schema: {
+      type: "object",
+      properties: {
+        notes: { type: "string", description: "Allergies, preferences, or budget notes" },
+      },
+    },
+  },
 ];
 
 export async function executeAssistantTool(
@@ -135,6 +190,35 @@ export async function executeAssistantTool(
     case "get_digest": {
       const digest = await buildDigest(householdId);
       return { digest };
+    }
+    case "add_transaction": {
+      const category = (
+        TRANSACTION_CATEGORIES.includes(input.category as string) ? input.category : "OTHER"
+      ) as TransactionCategory;
+      const transaction = await prisma.transaction.create({
+        data: {
+          householdId,
+          description: String(input.description),
+          amount: Number(input.amount),
+          category,
+          occurredAt: new Date(),
+        },
+      });
+      return { created: "transaction", transaction: serializeTransaction(transaction) };
+    }
+    case "add_budget_goal": {
+      const goal = await prisma.budgetGoal.create({
+        data: {
+          householdId,
+          name: String(input.name),
+          targetAmount: Number(input.targetAmount),
+        },
+      });
+      return { created: "budget_goal", goal: serializeBudgetGoal(goal) };
+    }
+    case "generate_meal_plan": {
+      const mealPlan = await generateAndSaveMealPlan(householdId, input.notes as string | undefined);
+      return { created: "meal_plan", mealPlan: serializeMealPlan(mealPlan) };
     }
     default:
       return { error: `Unknown tool ${toolName}` };
