@@ -13,10 +13,15 @@ import {
   serializeMealPlan,
   serializeTransaction,
   serializeBudgetGoal,
+  serializeBankConnection,
 } from "@/lib/serialize";
 import DashboardClient from "./DashboardClient";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { bank?: string };
+}) {
   const session = await getSession();
   if (!session) {
     redirect("/login");
@@ -33,6 +38,7 @@ export default async function DashboardPage() {
     mealPlan,
     transactions,
     budgetGoals,
+    bankConnection,
     budgetSummary,
     digest,
   ] = await Promise.all([
@@ -64,6 +70,7 @@ export default async function DashboardPage() {
       take: 100,
     }),
     prisma.budgetGoal.findMany({ where: { householdId: session.householdId }, orderBy: { createdAt: "asc" } }),
+    prisma.bankConnection.findFirst({ where: { householdId: session.householdId }, orderBy: { createdAt: "desc" } }),
     buildBudgetSummary(session.householdId),
     buildDigest(session.householdId),
   ]);
@@ -82,6 +89,8 @@ export default async function DashboardPage() {
       initialMealPlan={mealPlan ? serializeMealPlan(mealPlan) : null}
       initialTransactions={transactions.map(serializeTransaction)}
       initialBudgetGoals={budgetGoals.map(serializeBudgetGoal)}
+      initialBankConnection={serializeBankConnection(bankConnection)}
+      bankStatus={searchParams.bank}
       budgetSummary={budgetSummary}
       digest={digest}
     />

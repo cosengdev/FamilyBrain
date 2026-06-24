@@ -32,6 +32,7 @@ model Household {
   mealPlans         MealPlan[]
   transactions      Transaction[]
   budgetGoals       BudgetGoal[]
+  bankConnections   BankConnection[]
 }
 
 model User {
@@ -185,7 +186,21 @@ model Transaction {
   amount      Decimal
   category    TransactionCategory
   occurredAt  DateTime
+  source      String              @default("manual")
+  externalId  String?             @unique
   createdAt   DateTime            @default(now())
+}
+
+model BankConnection {
+  id           String    @id @default(cuid())
+  householdId  String
+  household    Household @relation(fields: [householdId], references: [id])
+  provider     String    @default("truelayer")
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
 }
 
 model BudgetGoal {

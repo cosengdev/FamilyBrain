@@ -31,7 +31,14 @@ type MealPlanDTO = {
   days: { date: string; title: string; ingredients: string[] }[];
 } | null;
 
-type TransactionDTO = { id: string; description: string; amount: number; category: string; occurredAt: string };
+type TransactionDTO = {
+  id: string;
+  description: string;
+  amount: number;
+  category: string;
+  occurredAt: string;
+  source: string;
+};
 type BudgetGoalDTO = {
   id: string;
   name: string;
@@ -46,6 +53,8 @@ type BudgetSummaryDTO = {
   anomalies: { category: string; currentTotal: number; previousAverage: number; difference: number }[];
 };
 
+type BankConnectionDTO = { id: string; provider: string; lastSyncedAt: string | null } | null;
+
 interface Props {
   userName: string;
   role: string;
@@ -59,6 +68,8 @@ interface Props {
   initialMealPlan: MealPlanDTO;
   initialTransactions: TransactionDTO[];
   initialBudgetGoals: BudgetGoalDTO[];
+  initialBankConnection: BankConnectionDTO;
+  bankStatus?: string;
   budgetSummary: BudgetSummaryDTO;
   digest: DigestDTO;
 }
@@ -101,6 +112,8 @@ export default function DashboardClient({
   initialMealPlan,
   initialTransactions,
   initialBudgetGoals,
+  initialBankConnection,
+  bankStatus,
   budgetSummary,
   digest,
 }: Props) {
@@ -114,7 +127,24 @@ export default function DashboardClient({
   const [mealNotes, setMealNotes] = useState("");
   const [transactions, setTransactions] = useState(initialTransactions);
   const [budgetGoals, setBudgetGoals] = useState(initialBudgetGoals);
+  const [bankConnection] = useState(initialBankConnection);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [invites, setInvites] = useState(initialInvites);
+
+  async function syncBank() {
+    setSyncing(true);
+    setSyncMessage(null);
+    const res = await fetch("/api/banking/sync", { method: "POST" });
+    setSyncing(false);
+    if (res.ok) {
+      const data = await res.json();
+      setSyncMessage(`Synced ${data.synced} new transaction${data.synced === 1 ? "" : "s"}.`);
+      router.refresh();
+    } else {
+      setSyncMessage("Sync failed.");
+    }
+  }
 
   const [eventTitle, setEventTitle] = useState("");
   const [eventStart, setEventStart] = useState("");
@@ -404,6 +434,10 @@ export default function DashboardClient({
         <button onClick={logout}>Log out</button>
       </header>
 
+      {bankStatus === "connected" && <p role="alert">Bank connected and transactions synced.</p>}
+      {bankStatus === "error" && <p role="alert">Couldn&apos;t connect your bank — please try again.</p>}
+      {bankStatus === "invalid_state" && <p role="alert">That connection link expired — please try again.</p>}
+
       <section>
         <h2>Today&apos;s briefing</h2>
         {!hasBriefing ? (
@@ -590,6 +624,21 @@ export default function DashboardClient({
 
       <section>
         <h2>Budget</h2>
+        {bankConnection ? (
+          <p>
+            Bank connected ({bankConnection.provider}). Last synced:{" "}
+            {bankConnection.lastSyncedAt ? new Date(bankConnection.lastSyncedAt).toLocaleString() : "never"}.{" "}
+            <button onClick={syncBank} disabled={syncing}>
+              {syncing ? "Syncing..." : "Sync now"}
+            </button>
+            {syncMessage && <span> {syncMessage}</span>}
+          </p>
+        ) : (
+          <p>
+            <a href="/api/banking/connect">Connect your bank (sandbox)</a> to sync real transactions alongside
+            manual entries.
+          </p>
+        )}
         <p>
           £{budgetSummary.totalThisMonth.toFixed(2)} spent in {budgetSummary.month}
           {budgetSummary.byCategory.length > 0 && (
@@ -619,6 +668,7 @@ export default function DashboardClient({
               <span>
                 {t.description} — £{t.amount.toFixed(2)} ({t.category.toLowerCase()}) on{" "}
                 {new Date(t.occurredAt).toLocaleDateString()}
+                {t.source === "truelayer" ? " 🏦" : ""}
               </span>
               <button onClick={() => deleteTransaction(t.id)}>Remove</button>
             </li>

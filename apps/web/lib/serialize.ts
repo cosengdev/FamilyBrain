@@ -8,6 +8,7 @@ import type {
   MealPlan,
   Transaction,
   BudgetGoal,
+  BankConnection,
 } from "@prisma/client";
 
 export function serializeEvent(e: CalendarEvent) {
@@ -73,6 +74,7 @@ export function serializeTransaction(t: Transaction) {
     amount: Number(t.amount),
     category: t.category,
     occurredAt: t.occurredAt.toISOString(),
+    source: t.source,
   };
 }
 
@@ -83,6 +85,15 @@ export function serializeBudgetGoal(g: BudgetGoal) {
     targetAmount: Number(g.targetAmount),
     savedAmount: Number(g.savedAmount),
     targetDate: g.targetDate ? g.targetDate.toISOString() : null,
+  };
+}
+
+export function serializeBankConnection(c: BankConnection | null) {
+  if (!c) return null;
+  return {
+    id: c.id,
+    provider: c.provider,
+    lastSyncedAt: c.lastSyncedAt ? c.lastSyncedAt.toISOString() : null,
   };
 }
 
